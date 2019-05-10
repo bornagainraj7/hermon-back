@@ -2,6 +2,6 @@
     "name": "Hermon - Meeting Scheduling System Backend(node.js/Express)",
     "version": "1.0.0",
     "description": "Documentation Hermon backend",
-    "title": "IssueHub API",
+    "title": "Hermon API",
     "url": "http://api.hermon.ga"
 }
