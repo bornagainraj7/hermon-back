@@ -1,4 +1,4 @@
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const logger = require('./loggerLib');
 const saltRounds = 7;
 
@@ -9,19 +9,25 @@ let hashPassword = (plainText) => {
     return hash;
 }
 
-let comparePassword = (password, hashPassword, callback) => {
-    bcrypt.compare(password, hashPassword, (err, res) => {
-        if(err) {
+let comparePassword = (plainPassword, hashPassword, cb) => {
+    bcrypt.compare(plainPassword, hashPassword, (err, res) => {
+        if (err) {
             logger.error(`${err}`, "PasswordLib: comparePassword()", "med");
-            callback(err, null);
-        } else {
-            logger.info("Password Match!", "PasswordLib: comparePassword()","successful");
-            callback(null. res);
+            cb(err, null);
+        } else if(res === true) {
+            // logger.info("Password match successfully", "PasswordLib: comparePassword()", "successful");
+            cb(null, res);
+        } else if(res === false) {
+            logger.error(`Password didn't match`, "PasswordLib: comparePassword()", "med");
+            cb(null, res);
         }
     });
-}
+
+};
+
+
 
 module.exports = {
     hashPassword: hashPassword,
-    comparePassword: comparePassword
+    comparePassword: comparePassword,
 }

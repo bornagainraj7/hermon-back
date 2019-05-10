@@ -6,7 +6,8 @@ const validateInput = require('./../libs/paramsValidationLib');
 const passwordLib = require('./../libs/passwordLib');
 const tokenLib = require('./../libs/tokenLib');
 const time = require('./../libs/timeLib');
-const verify = require('./../libs/verifyLib');
+const userLib = require('../libs/userLib');
+const mailLib = require('./../libs/mailLib');
 
 const UserModel = require('./../models/userModel');
 const EventModel = require('./../models/eventModel');
@@ -14,25 +15,25 @@ const AuthModel = require('./../models/authModel');
 
 // signup function
 let signUpUser = (req, res) => {
-    let username;
+    let username = req.body.username.toLowerCase();
     let email = req.body.email.toLowerCase();
     let password = passwordLib.hashPassword(req.body.password);
+    let title;
 
-    if(req.body.isAdmin == 'true') {
-        username = check.trim(req.body.username) + "-admin";
-        username.toLowerCase();
+    if(req.body.isAdmin == true) {
+        title = "admin";
     } else {
-        username = check.trim(req.body.username) + "-user";
-        username.toLowerCase();
+        title = "user";
     }
     
 
     let newUser = new UserModel({
         userId: shortId.generate(),
-        firstName: req.body.firstName,
-        lastName: req.body.lastName || '',
+        firstName: check.trim(req.body.firstName),
+        lastName: check.trim(req.body.lastName) || '',
         fullName: `${req.body.firstName} ${req.body.lastName}`,
         username: username,
+        title: title,
         email: email,
         password: password,
         country: req.body.country,
@@ -60,8 +61,7 @@ let signUpUser = (req, res) => {
                 } else {
 
                     // searching for user
-                    verify.ifUserExists(req.body.email, (err, result) => {
-                        console.log("In method");
+                    userLib.ifUserExists(req.body.email, (err, result) => {
                         if(err) {
                             logger.error(`${err}`, "UserController: SignUpUser(): ifUserExists()", "high");
                             let apiResponse = response.generate(true, "Error while checking user email", 500, null);
@@ -86,12 +86,16 @@ let signUpUser = (req, res) => {
         return new Promise((resolve, reject) => {
             newUser.save()
             .then((result) => {
-                let newUserObj = result.toObject({ getters: true });
+                let newUserObj = newUser.toObject();
 
                 delete newUserObj.password;
                 delete newUserObj._id;
                 delete newUserObj.__v;
 
+                newUserObj.username = newUserObj.username + '-' + newUserObj.title;
+                delete newUserObj.title;
+
+                logger.info('User Created successfully', "UserController: SignUpUser(): createUser()", "successful");
                 resolve(newUserObj);
             })
             .catch((err) => {
@@ -107,7 +111,6 @@ let signUpUser = (req, res) => {
         return new Promise((resolve, reject) => {
             tokenLib.generateToken(userObj, (err, tokenDetails) => {
                 if(err) {
-                    logger.error(`${err}`, "UserController: SignUpUser(): generateToken()", "high");
                     let apiResponse = response.generate(true, "Failed to generate Token", 500, null);
                     reject(apiResponse);
                 } else {
@@ -128,76 +131,27 @@ let signUpUser = (req, res) => {
     // save token function
     let saveToken = (token) => {
         return new Promise((resolve, reject) => {
-            AuthModel.findOne({ userId: token.userId })
-            .then((result) => {
-                if(check.isEmpty(result)) {
-                    // creating new auth entry
-                    let newAuthToken = new AuthModel({
-                        authId: shortId.generate(),
-                        userId: token.userId,
-                        authToken: token.authToken,
-                        tokenSecret: token.tokenSecret,
-                        generatedOn: new Date()
-                    });
-
-                    // saving token
-                    newAuthToken.save()
-                    .then(AuthResult => {
-                        let response = {
-                            authToken: AuthResult.authToken,
-                            userId: token.userId,
-                            expiresIn: token.expiresIn,
-                            userDetails: token.userDetails
-                        }
-
-                        resolve(response);
-                    })
-                    .catch(error => {
-                        logger.error(`${error}`, "UserController: SignUpUser(): saveToken()", "high");
-                        let apiResponse = response.generate(true, "Failed to generate token", 500, null);
-                        reject(apiResponse);
-                    });
-
+            tokenLib.saveToken(token, (err, response) => {
+                if(err) {
+                    let apiResponse = response.generate(true, "Couldn't initialize auth token for the user", 500, null);
+                    reject(apiResponse);
                 } else {
-
-                    // overwriting existing auth entry
-                    result.authToken = token.authToken;
-                    result.tokenSecret = token.tokenSecret;
-                    result.generatedOn = new Date();
-
-                    result.save()
-                    .then(newToken => {
-                        let response = {
-                            authToken: newToken.authToken,
-                            userId: token.userId,
-                            expiresIn: token.expiresIn,
-                            userDetails: token.userDetails
-                        };
-
-                        resolve(response);
-                    })
-                    .catch(error => {
-                        logger.error(`${error}`, "UserController: SignUpUser(): saveToken()", "high");
-                        let apiResponse = response.generate(true, "Failed to generate token", 500, null);
-                        reject(apiResponse);
-                    });
+                    logger.info('Token saved successfully', "UserController: SignUpUser(): saveToken()", "successful");
+                    resolve(response);
                 }
-            })
-            .catch((err) => {
-                logger.error(`${err}`, "UserController: SignUpUser(): saveToken()", "high");
-                let apiResponse = response.generate(true, "Failed to generate token", 500, null);
-                reject(apiResponse);
-            })
+            });
         });
     }
 
 
     async function execute(req, res) {
         try{
-            const verify = await ifUserExists();
+            const userLib = await ifUserExists();
             const newUserObj = await createUser();
             const generatedToken = await generateToken(newUserObj);
             const finalResponse = await saveToken(generatedToken);
+
+            mailLib.signUpEmail(newUserObj);
             
             let apiResponse = response.generate(false, "User created and auth token generated Successfully", 201, finalResponse);
             res.send(apiResponse);
@@ -216,38 +170,40 @@ let loginUser = (req, res) => {
     let email = req.body.email;
     let password = req.body.password;
 
-    let validateUser = () => {
+    let findUser = () => {
         return new Promise((resolve, reject) => {
-            verify.findUser(email, (error, result) => {
-                if (error) {
-                    logger.error(`${error}`, "UserController: loginUser(): validateUser()", "high");
-                    let apiResponse = response.generate(true, "Unable to find User", 500, null);
+            userLib.findUser(email, (err, result) => {
+                if(err) {
+                    logger.error(`${err}`, "UserController: LoginUser(): findUser()", "high");
+                    let apiResponse = response.generate(true, "Couldn't get user details", 500, null);
                     reject(apiResponse);
-                } else if(check.isEmpty(result)) {
-                    logger.error("No user found", "", "med");
-                    let apiResponse = response.generate(true, "No user found with the provided details", 404, null);
+                } else if(check.isEmpty(result)){
+                    logger.error("User not found", "UserController: LoginUser(): findUser()", "med");
+                    let apiResponse = response.generate(true, "User not found", 404, null);
                     reject(apiResponse);
                 } else {
-                    passwordLib.comparePassword(password, result.password, (err, match) => {
-                        if(err) {
-                            logger.error(`${err}`, "UserController: loginUser(): validateUser()", "high");
-                            let apiResponse = response.generate(true, "Couldn't validate user's password", 401, null);
-                            reject(apiResponse);
-                        } else if(match) {
-                            let userDetailsObj = result.toObject({getters: true});
-                            
-                            delete userDetailsObj.password;
-                            delete userDetailsObj._id;
-                            delete userDetailsObj.__v;
-
-                            resolve(userDetailsObj);
-                        }
-                    });
+                    resolve(result);
                 }
             });
         });
-        
     }
+
+    let validatePassword = (userObj) => {
+        return new Promise((resolve, reject) => {
+            passwordLib.comparePassword(password, userObj.password, (err, result) => {
+                if(err) {
+                    let apiResponse = response.generate(true, "Password didn't match", 404, null);
+                    reject(apiResponse);
+                } else if(result === true) {
+                    resolve(result);
+                } else {
+                    let apiResponse = response.generate(true, "Password didn't match", 404, null);
+                    reject(apiResponse);
+                }
+            });
+        });
+    }
+
 
     let generateToken = (userDetails) => {
         return new Promise((resolve, reject) => {
@@ -257,7 +213,7 @@ let loginUser = (req, res) => {
                     let apiResponse = response.generate(true, "Couldn't generate token", 500, null);
                     reject(apiResponse);
                 } else {
-                    logger.info("Token generated successfully", "UserController: loginUser(): generateToken()", "successful");
+                    // logger.info("Token generated successfully", "UserController: loginUser(): generateToken()", "successful");
 
                     token.userId = userDetails.userId;
                     token.expiresIn = 86395;
@@ -270,67 +226,16 @@ let loginUser = (req, res) => {
         });
     }
 
-    let saveToken = (tokenDetails) => {
+    let saveToken = (token) => {
         return new Promise((resolve, reject) => {
-            AuthModel.findOne({ userId: tokenDetails.userId })
-            .then((result) => {
-                if(check.isEmpty(result)) {
-                    // creating new auth entry
-                    let newAuthToken = new AuthModel({
-                        authId: shortId.generate(),
-                        userId: tokenDetails.userId,
-                        authToken: tokenDetails.authToken,
-                        tokenSecret: tokenDetails.tokenSecret,
-                        generatedOn: new Date()
-                    });
-
-                    newAuthToken.save()
-                    .then(AuthToken => {
-                        let response = {
-                            authToken: AuthToken.authToken,
-                            userId: tokenDetails.userId,
-                            expiresIn: tokenDetails.expiresIn,
-                            userDetails: tokenDetails.userDetails
-                            
-                        }
-                        resolve(response);
-
-                    })
-                    .catch(err => {
-                        logger.error(`${err}`, "UserController: loginUser(): saveToken()", "high");
-                        let apiResponse = response.generate(true, "Couldn't initialize auth token for the user", 500, null);
-                        reject(apiResponse);
-                    });
-
+            tokenLib.saveToken(token, (err, response) => {
+                if (err) {
+                    let apiResponse = response.generate(true, "Couldn't initialize auth token for the user", 500, null);
+                    reject(apiResponse);
                 } else {
-
-                    result.authToken = tokenDetails.authToken;
-                    result.tokenSecret = tokenDetails.tokenSecret;
-                    result.generatedOn = new Date();
-
-                    result.save()
-                    .then(newToken => {
-                        let response = {
-                            authToken: newToken.authToken,
-                            userId: newToken.userId,
-                            expiresIn: tokenDetails.expiresIn,
-                            userDetails: tokenDetails.userDetails
-                        };
-
-                        resolve(response);
-                    })
-                    .catch(err => {
-                        logger.error(`${err}`, "UserController: loginUser(): saveToken()", "high");
-                        let apiResponse = response.generate(true, "Couldn't initialize auth token for the user", 500, null);
-                        reject(apiResponse);
-                    });
-
+                    // logger.info("Token saved successfully", "UserController: LoginUser(): saveToken()", "success");
+                    resolve(response);
                 }
-            })
-            .catch((err) => {
-                logger.error(`${err}`, "UserController: loginUser(): saveToken()", "high");
-                let apiResponse = response.generate(true, "Couldn't initialize auth token", 500, null);
-                reject(apiResponse);
             });
         });
     }
@@ -338,8 +243,9 @@ let loginUser = (req, res) => {
 
     async function execute(req, res) {
         try {
-            const validate = await validateUser();
-            const generatedToken = await generateToken(validate);
+            const user = await findUser();
+            const password = await validatePassword(user);
+            const generatedToken = await generateToken(user);
             const finalResponse = await saveToken(generatedToken);
 
             let apiResponse = response.generate(false, "User logged in successfully", 201, finalResponse);
@@ -354,78 +260,9 @@ let loginUser = (req, res) => {
 
 }
 
-//edit user function
-let editUser = (req, res) => {
-    let userId = req.params.userId;
-    let options = req.body;
-
-    let input = verify.verifyInput(userId);
-
-    let getUser = () => {
-        return new Promise((resolve, reject) => {
-            verify.findUserById(userId, (err, result) => {
-                if(err) {
-                    logger.error(`${err}`, "UserController: editUser(): getUser()", "high");
-                    let apiResponse = response.generate(true, "Unable to find the user", 500, null);
-                    reject(apiResponse);
-                } else if(check.isEmpty(result)) {
-                    logger.error(`${err}`, "UserController: editUser(): getUser()", "med");
-                    let apiResponse = response.generate(true, "User doesn't exists", 404, null);
-                    reject(apiResponse);
-                } else {
-                    logger.info("User found", "UserController: editUser(): getUser()", "successful");
-                    resolve();
-                }
-            });
-        });
-    }
-
-    let updateUser = () => {
-        return new Promise((resolve, reject) => {
-            UserModel.findOneAndUpdate({userId: userId}, options)
-            .then((result) => {
-                if(result.n > 0) {
-                    resolve(result);
-                } else {
-                    logger.error("No new data found to update user", "UserController: editUser(): updateUser()", "low");
-                    let apiResponse = response.generate(true, "No new data found to update user", 404, null);
-                    reject(apiResponse);
-                }
-            })
-            .catch((error) => {
-                logger.error(`${error}`, "UserController: editUser(): updateUser()", "high");
-                let apiResponse = response.generate(true, "Error updating user info", 500, null);
-                reject(apiResponse);
-            })
-        })
-    }
-
-
-
-    async function execute(req, res) {
-        if(input) {
-            try {
-                await getUser();
-                let user = await updateUser();
-
-                let apiResponse = response.generate(false, "User info updated successfully", 201, user);
-                res.send(apiResponse);
-            } catch(error) {
-                res.send(error);
-            }
-        } else {
-            let apiResponse = response.generate(true, "Empty userId string, couldn't locate user", 500, null);
-            res.send(apiResponse);
-        }
-    }
-
-    execute(req, res);
-
-}
-
 
 let getAllUsers = (req, res) => {
-    UserModel.find()
+    UserModel.find().select('-password -__v -_id').lean()
     .then((result) => {
         if(check.isEmpty(result)) {
             let apiResponse = response.generate(true, "No user found", 404, null);
@@ -437,8 +274,69 @@ let getAllUsers = (req, res) => {
     })
     .catch((err) => {
         logger.error(`${err}`, "UserController: getAllUsers()", "high");
-        res.send(err);
+        let apiResponse = response.generate(true, `${err}`, 500, null);
+        res.send(apiResponse);
     });
+}
+
+
+let getAllAdminUsers = (req, res) => {
+    UserModel.find({isAdmin: true}).select('-password -__v -_id').lean()
+    .then((result) => {
+        if(check.isEmpty(result)) {
+            let apiResponse = response.generate(true, "No admin users found", 404, null);
+            res.send(apiResponse);
+        } else {
+            let apiResponse = response.generate(false, "All admin users listed", 200, result);
+            res.send(apiResponse);
+        }
+    })
+    .catch((err) => {
+        logger.error(`${err}`, "UserController: getAllAdminUsers", "high");
+        let apiResponse = response.generate(true, `${err}`, 500, null);
+        res.send(apiResponse);
+    })
+}
+
+
+let getAllNormalUsers = (req, res) => {
+    UserModel.find({isAdmin: false}).select('-password -__v -_id').lean()
+    .then((result) => {
+        if(check.isEmpty(result)) {
+            let apiResponse = response.generate(true, "No normal users found", 404, null);
+            res.send(apiResponse);
+        } else {
+            let apiResponse = response.generate(false, "All normal users listed", 200, result);
+            res.send(apiResponse);
+        }
+    })
+    .catch((err) => {
+        logger.error(`${err}`, "UserController: getAllNormalUsers", "high");
+        let apiResponse = response.generate(true, `${err}`, 500, null);
+        res.send(apiResponse);
+    })
+}
+
+
+let getSingleUser = (req, res) => {
+    let userId = req.params.userId;
+
+    userLib.findUserById(userId, (err, result) => {
+        if(err) {
+            let apiResponse = response.generate(true, "Couldn't get user", 500, null);
+            res.send(apiResponse);
+        } else if(check.isEmpty(result)) {
+            logger.error("User not found", "UserController: getSingleUser()", "med");
+            let apiResponse = response.generate(true, "User not found", 404, null);
+            res.send(apiResponse);
+        } else {
+            delete result.password;
+            let apiResponse = response.generate(false, "User details found", 200, result);
+            res.send(apiResponse);
+        }
+    });
+
+
 }
 
 
@@ -482,7 +380,8 @@ let removeUser = (req, res) => {
             })
             .catch((err) => {
                 logger.error(`${err}`, "UserController: removeUser(): removeAuth()", "high");
-                reject(err);
+                let apiResponse = response.generate(true, "Couldn't delete user auth", 500, result);
+                reject(apiResponse);
             });
         });
     }
@@ -505,53 +404,257 @@ let removeUser = (req, res) => {
 }
 
 
-let getAllAuth = (req, res) => {
-    AuthModel.find()
-    .then(result => {
-        if (check.isEmpty(result)) {
-            let apiResponse = response.generate(true, "No Auth found", 404, null);
-            res.send(apiResponse);
-        } else {
-            let apiResponse = response.generate(false, "All auth listed", 200, result);
-            res.send(apiResponse);
-        }
-    })
-    .catch(err => {
-        logger.error(`${err}`, "UserController: getAllAuth()", "high");
-        res.send(err);
-    }) 
-}
-
-
-let removeAuth = (req, res) => {
-
-    let userId = req.params.userId;
-
-    AuthModel.deleteMany({userId: userId})
+let logoutUser = (req, res) => {
+    let userId = req.user.userId;
+    AuthModel.deleteOne({userId: userId})
     .then((result) => {
         if(result.n > 0) {
-            logger.info("User Auth deleted as per request", "UserController: removeAuth()", "successful");
-            let apiResponse = response.generate(false, "User Auth successfully removed", 201, result);
+            let apiResponse = response.generate(false, "User logged out successfully", 201, null);
             res.send(apiResponse);
         } else {
-            logger.error("Couldn't find Auth for the user", "UserController: removeAuth()", "med");
-            let apiResponse = response.generate(true, "User Auth not found", 404, result);
+            logger.error("User already logged out or invalid userId", "UserController: logoutUser()", 'high');
+            let apiResponse = response.generate(true, "User already logged out or invalid userId", 404, null);
             res.send(apiResponse);
         }
     })
     .catch((err) => {
-        logger.error(`${err}`, "UserController: removeAuth()", "high");
-        res.send(err);
+        logger.error(`${err}`, "UserController: logoutUser()", "high");
+        let apiResponse = response.generate(true, "Server went into an error while trying to logout", 500, null);
+        res.send(apiResponse);
+    });
+
+}
+
+
+let recoverPassword = (req, res) => {
+    let email = req.body.email;
+
+    let validateUser = () => {
+        return new Promise((resolve, reject) => {
+            userLib.findUser(email, (error, result) => {
+                if(error) {
+                    logger.error(`${error}`, "UserController: recoverPassword(): validateUser()", "high");
+                    let apiResponse = response.generate(true, "Server error while validating user", 500, null);
+                    reject(apiResponse);
+                } else if(check.isEmpty(result)) {
+                    logger.error("Couldn't find user", "UserController: recoverPassword(): validateUser()", "med");
+                    let apiResponse = response.generate(true, "Couldn't find user", 404, null);
+                    reject(apiResponse);
+                } else {
+                    resolve(result);
+                }
+            });
+        });
+    }
+
+    let generateToken = (userObj) => {
+        return new Promise((resolve, reject) => {
+            tokenLib.generateToken(userObj, (err, tokenDetails) => {
+                if(err) {
+                    let apiResponse = response.generate(true, "failed to generate token", 500, null);
+                    reject(apiResponse);
+                } else {
+                    logger.info("Token generated successfully", "UserController: recoverPassword(): generateToken", "successful");
+
+                    tokenDetails.userId = userObj.userId;
+                    tokenDetails.expiresIn = 86395;
+                    tokenDetails.userDetails = userObj;
+
+                    resolve(tokenDetails);
+                }
+            });
+        });
+    }
+
+    let saveToken = (tokenDetails) => {
+        return new Promise((resolve, reject) => {
+            tokenLib.saveToken(tokenDetails, (err, response) => {
+                if(err) {
+                    let apiResponse = response.generate(true, "Couldn't initialize token for the user", 500, null);
+                    reject(apiResponse);
+                } else {
+                    logger.info('Token saved successfully', "UserController: recoverPassword(): saveToken()", "successful")
+                    resolve(response);
+                }
+            });
+        });
+    }
+
+    let sendEmail = (savedToken) => {
+        return new Promise((resolve, reject) => {
+            mailLib.resetPasswordEmail(savedToken, (err, result) => {
+                if(err) {
+                    let apiResponse = response.generate(`${err}`, "Some error while sending email", 500, null);
+                    reject(apiResponse);
+                } else {
+                    resolve(result);
+                }
+            });
+        });
+    }
+
+
+    async function execute(req, res) {
+        try {
+            let userObj = await validateUser();
+            let tokenGenerated = await generateToken(userObj);
+            let savedToken = await saveToken(tokenGenerated);
+            let email = await sendEmail(savedToken);
+
+            let apiResponse = response.generate(false, "Please click on the link in your registered email, do check your spam if not in inbox.", 201, null);
+            res.send(apiResponse);
+
+        } catch(error) {
+            res.send(error);
+        }
+    }
+
+    execute(req, res);
+
+}
+
+
+let resetPassword = (req, res) => {
+    let userId = req.user.userId;
+    let newPassword = req.body.password;
+    let options = req.body;
+
+    let findUser = () => {
+        return new Promise((resolve, reject) => {
+            userLib.findUserById(userId, (err, result) => {
+                if(err) {
+                    let apiResponse = response.generate(true, "Couldn't verify user", 500, null);
+                    reject(apiResponse);
+                } else if(check.isEmpty(result)){
+                    let apiResponse = response.generate(true, "Couldn't find user", 404, null);
+                    reject(apiResponse);
+                } else {
+                    resolve(result);
+                }
+            });
+        });
+    }
+
+    let samePassword = (userDetails) => {
+        console.log('same password');
+        return new Promise((resolve, reject) => {
+            console.log(newPassword);
+            console.log(userDetails.password);
+            passwordLib.comparePassword(newPassword, userDetails.password, (err, res) => {
+                if(err) {
+                    logger.error(`${err}`, "UserController: resetPassword(): samePassword()", "high")
+                    let apiResponse = response.generate(true, "Couldn't assign new password to user", 500, null);
+                    reject(apiResponse);
+                } else if (res === false){
+                    resolve();
+                } else if(res === true) {
+                    let apiResponse = response.generate(true, "New password should be different from current password", 401, null);
+                    reject(apiResponse);
+                }
+            });
+        });
+    }
+
+    let changePassword = () => {
+        options.password = passwordLib.hashPassword(options.password);
+        console.log('change password');
+        return new Promise((resolve, reject) => {
+            UserModel.updateOne({ userId: userId }, options, { new: true })
+            .then((result) => {
+                if(result.n > 0) {
+                    logger.info("Password was successfully reset", "UserController: resetPassword()", "successful");
+                    resolve(result);
+                }
+            })
+            .catch((err) => {
+                logger.error(`${err}`, "UserController: resetPassword()", "high");
+                let apiResponse = response.generate(true, "Couldn't reset password", 500, null);
+                reject(apiResponse);
+            });
+        });
+    }
+
+
+    async function execute(req, res) {
+        try{
+            let user = await findUser();
+            let oldPassword = await samePassword(user);
+            let finalResponse = await changePassword();
+
+            let apiResponse = response.generate(false, "Password was successfully reset, please login to continue", 201, null);
+            res.send(apiResponse);
+        } catch(error) {
+            res.send(error);
+        }
+    }
+
+    execute(req, res);
+
+}
+
+
+let checkUserName = (req, res) => {
+    userName = req.body.username;
+
+    UserModel.find({username : userName})
+    .then((result) => {
+        if(check.isEmpty(result)) {
+            let apiResponse = response.generate(false, "The username you entered is available", 200, null);
+            res.send(apiResponse);
+        } else {   
+            let apiResponse = response.generate(true, "The username you enetered is already taken", 401, null);
+            res.send(apiResponse);
+        }
+    })
+    .catch((err) => {
+        logger.error(`${err}`, "UserController: checkUserName()", "high");
+        let apiResponse = response.generate(true, "Error while fetching data from the server, try again later", 500, null);
+        res.send(apiResponse);
     });
 }
+
+
+let getAllAdminCount = (req, res) => {
+    UserModel.countDocuments({isAdmin: true})
+    .then((count) => {
+        let apiResponse = response.generate(false, "Count retrivied", 200, count);
+        res.send(apiResponse);
+    })
+    .catch((err) => {
+        logger.error(`${err}`, "UserController: getAllAdminCount()", "high");
+        let apiResponse = response.generate(true, `${err}`, 500, null);
+        res.send(apiResponse);
+    });
+}
+
+
+let getAllNormalUsersCount = (req, res) => {
+    UserModel.countDocuments({isAdmin: false})
+    .then((count) => {
+        let apiResponse = response.generate(false, "Count retrivied", 200, count);
+        res.send(apiResponse);
+    })
+    .catch((error) => {
+        logger.error(`${error}`, "UserController: getAllNormalUsersCount()", "high");
+        let apiResponse = response.generate(true, `${error}`, 500, null);
+        res.send(apiResponse);
+    });
+}
+
 
 
 module.exports = {
     signUpUser: signUpUser,
     loginUser: loginUser,
-    editUser: editUser,
     getAllUsers: getAllUsers,
-    getAllAuth: getAllAuth,
+    getSingleUser: getSingleUser,
     removeUser: removeUser,
-    removeAuth: removeAuth
+    logoutUser: logoutUser,
+    recoverPassword: recoverPassword,
+    resetPassword: resetPassword,
+    checkUserName: checkUserName,
+    getAllAdminUsers: getAllAdminUsers,
+    getAllNormalUsers: getAllNormalUsers,
+    getAllAdminCount: getAllAdminCount,
+    getAllNormalUsersCount: getAllNormalUsersCount
 }

@@ -1,5 +1,4 @@
-const UserModel = require('./../models/userModel');
-const EventModel = require('./../models/eventModel');
+const UserModel = require('../models/userModel');
 const check = require('./checkLib');
 const logger = require('./loggerLib');
 
@@ -14,41 +13,33 @@ let ifUserExists = (email, callback) => {
         }
     })
     .catch((err) => {
-        logger.error(`${err}`, "Verify Lib: ifUserExists()", "high");
+        logger.error(`${err}`, "User Lib: ifUserExists()", "high");
         callback(err, null);
     });
 }
 
 
 let findUser = (email, callback) => {
-    UserModel.findOne({ email: email })
+    UserModel.findOne({ email: email }).select('-__v -id').lean()
     .then((result) => {
-        if(check.isEmpty(result)) {
-            callback(null, result);
-        } else {
-            callback(null, result);
-        }
+        callback(null, result);
     })
     .catch((err) => {
-        logger.error(`${err}`, "Verify Lib: findUser()", "high");
+        logger.error(`${err}`, "User Lib: findUser()", "high");
         callback(err, null);
     });
 }
 
 
 let findUserById = (userId, callback) => {
-    UserModel.findOne({ userId: userId })
-        .then((result) => {
-            if (check.isEmpty(result)) {
-                callback(null, result);
-            } else {
-                callback(null, result);
-            }
-        })
-        .catch((err) => {
-            logger.error(`${err}`, "Verify Lib: findUser()", "high");
-            callback(err, null);
-        });
+    UserModel.findOne({ userId: userId }).select('-__v -id').lean()
+    .then((result) => {
+        callback(null, result);
+    })
+    .catch((err) => {
+        logger.error(`${err}`, "User Lib: findUserById()", "high");
+        callback(err, null);
+    });
 }
 
 

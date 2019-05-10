@@ -12,28 +12,20 @@ let eventSchema = new Schema({
         type: String,
         required: true
     },
-    Start: {
+    start: {
         type: Date,
         required: true
     },
-    StartTime: {
-        type: String,
+    startTime: {
+        type: Object,
         required: true
     },
     end: {
-        type: String,
+        type: Date,
         default: ''
     },
     endTime: {
-        type: String,
-        default: ''
-    },
-    createdOn: {
-        type: Date,
-        required: true
-    },
-    modifiedOn: {
-        type: Date,
+        type: Object,
         default: ''
     },
     creatorId: {
@@ -43,6 +35,22 @@ let eventSchema = new Schema({
     creatorName: {
         type: String,
         required: true
+    },
+    userId: {
+        type: String,
+        required: true
+    },
+    color: {
+        type: String,
+        default: '#1d71c5'
+    },
+    createdOn: {
+        type: Date,
+        required: true
+    },
+    modifiedOn: {
+        type: Date,
+        default: ''
     }
 });
 

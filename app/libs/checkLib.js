@@ -1,6 +1,6 @@
 let trim = (char) => {
     let value = String(char);
-    return value.replace(/^\s + |\s + $/gm, '');
+    return value.replace(/^\s+|\s+$/gm, '');
 }
 
 let isEmpty = (value) => {

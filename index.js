@@ -11,6 +11,8 @@ const mongoose = require('mongoose');
 const logger = require('./app/libs/loggerLib');
 const response = require('./app/libs/responseLib');
 
+const appConfig = require('./config/appConfig');
+
 //Routes
 const userRoutes = require('./app/routes/userRoute');
 const eventRoutes = require('./app/routes/eventRoute');
@@ -29,14 +31,12 @@ app.use(routeLogger.ipLogger);
 app.use(errorHandler.errorHandler);
 
 // Set Headers for CORS
-app.use((req, res, next) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, X-HTTP-Method-Override, Content-Type, Accept, authToken");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, OPTIONS");
-    res.setHeader("Access-Control-Allow-Credentials", true);
-    res.setHeader("Access-Control-Allow-Max-Age", "86400");
-    next();
-});
+// app.use((req, res, next) => {
+//     res.setHeader("Access-Control-Allow-Origin", "*");
+//     res.setHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, X-HTTP-Method-Override, Content-Type, Accept, authToken");
+//     res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, OPTIONS");
+//     next();
+// });
 
 
 // const modelsPath = './app/models';
@@ -52,6 +52,7 @@ const routesPath = './app/routes';
 fs.readdirSync(routesPath).forEach((file) => {
     if (~file.indexOf('.js')) {
         let route = require(routesPath + '/' + file);
+        // console.log(file);
         route.setRouter(app);
     }
 });
@@ -104,7 +105,7 @@ const onListening = () => {
 
     //initiating mongoose only when server is initialized
     // let db = mongoose.connect('mongodb://127.0.0.1:27017/HermonDB', { useMongoClient: true });
-    let db = mongoose.connect('mongodb://127.0.0.1:27017/HermonDB', { useCreateIndex: true, useNewUrlParser: true });
+    let db = mongoose.connect(appConfig.db.uri, { useCreateIndex: true, useNewUrlParser: true });
 
 }
 
@@ -141,9 +142,9 @@ const port = normalizePort(process.env.PORT || "4000");
 app.set("port", port);
 
 
-app.get("/", (req, res) => {
-    res.send("This is the Home page");
-});
+// app.get("/", (req, res) => {
+//     res.send("This is the Home page");
+// });
 
 
 // Routes
@@ -157,9 +158,14 @@ app.use(errorHandler.notFoundHandler);
 
 //Server Initiated
 const server = http.createServer(app);
+server.listen(port);
 server.on("error", onError);
 server.on("listening", onListening);
-server.listen(port);
+
+//initializing socket
+const socket = require('./app/libs/socketLib');
+const socketServer = socket.setServer(server);
+
 
 
 module.exports = app;
