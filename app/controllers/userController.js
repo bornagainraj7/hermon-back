@@ -20,10 +20,14 @@ let signUpUser = (req, res) => {
     let password = passwordLib.hashPassword(req.body.password);
     let title;
 
-    if(req.body.isAdmin == true) {
+    console.log(req.body.isAdmin);
+
+    if(req.body.isAdmin == true || req.body.isAdmin == 'true') {
         title = "admin";
-    } else {
+        console.log("27 " +title+": "+req.body.isAdmin);
+    } else if (req.body.isAdmin == null || req.body.isAdmin == undefined || req.body.isAdmin == false || req.body.isAdmin == 'false') {
         title = "user";
+        console.log("30 "+title + ": " + req.body.isAdmin);
     }
     
 
@@ -93,7 +97,6 @@ let signUpUser = (req, res) => {
                 delete newUserObj.__v;
 
                 newUserObj.username = newUserObj.username + '-' + newUserObj.title;
-                delete newUserObj.title;
 
                 logger.info('User Created successfully', "UserController: SignUpUser(): createUser()", "successful");
                 resolve(newUserObj);
@@ -143,6 +146,18 @@ let signUpUser = (req, res) => {
         });
     }
 
+    let sendWelcomeMail = (userObj) => {
+        return new Promise((resolve, reject) => {
+            mailLib.signUpEmail(userObj, (err, result) => {
+                if(err) {
+                    resolve(false);
+                } else {
+                    resolve(true);
+                }
+            });
+        });
+    }
+
 
     async function execute(req, res) {
         try{
@@ -150,11 +165,15 @@ let signUpUser = (req, res) => {
             const newUserObj = await createUser();
             const generatedToken = await generateToken(newUserObj);
             const finalResponse = await saveToken(generatedToken);
+            const mail = await sendWelcomeMail(newUserObj);
 
-            mailLib.signUpEmail(newUserObj);
-            
-            let apiResponse = response.generate(false, "User created and auth token generated Successfully", 201, finalResponse);
-            res.send(apiResponse);
+            if(mail) {
+                let apiResponse = response.generate(false, "User created and auth token generated Successfully with welcome email", 201, finalResponse);
+                res.send(apiResponse);
+            } else {
+                let apiResponse = response.generate(false, "User created and auth token generated Successfully without welcome email", 201, finalResponse);
+                res.send(apiResponse);
+            }
         } catch(error) {
             res.send(error);
         }

@@ -10,6 +10,7 @@ const transporter = nodemailer.createTransport({
     host: appConfig.smtp,
     port: appConfig.mailPort,
     secure: false,
+    service: "gmail",
     tls: {
         rejectUnauthorized: false
     },
@@ -25,14 +26,14 @@ let resetPasswordEmail = (tokenObject, callback) => {
     let mailBody = `Hello <strong>${userObj.fullName}</strong>,<br> 
                 As per your recent request to reset your password, we've generated a link through which you can reset your password. 
                 Please click on the below link and change your password.<br>
-                <a href="http://localhost:4200/reset/form/${userObj.userId}/${tokenObject.authToken}" target="_blank">
-                    http://localhost:4200/reset/form/${userObj.userId}/${tokenObject.authToken}
+                <a href="http://hermon.ga/reset/form/${userObj.userId}/${tokenObject.authToken}" target="_blank">
+                    http://hermon.ga/reset/form/${userObj.userId}/${tokenObject.authToken}
                 </a>
                 `;
 
     
     let mailOptions = {
-        from: `"Hermon - Meeting Scheduling System " ${transporter.options.auth.user}`, //sender address
+        from: `"Hermon Meeting" ${transporter.options.auth.user}`, //sender address
         to: `"${userObj.email}"`, //receivers email 
         subject: "Password Reset Email - Hermon",
         html: mailBody
@@ -40,7 +41,6 @@ let resetPasswordEmail = (tokenObject, callback) => {
 
     transporter.sendMail(mailOptions, (err, result) => {
         if(err) {
-            console.log(mailOptions);
             logger.error(`${err}`, "mailLib: resetPasswordEmail()", "high");
             callback(err, null);
         } else {
@@ -51,17 +51,15 @@ let resetPasswordEmail = (tokenObject, callback) => {
 }
 
 
-let signUpEmail = (userObj) => {
-    let email = userObj.email;
-    let name = userObj.fullName;
-    let mailBody = `Hello and Welcome ${name},<br>
+let signUpEmail = (userObj, callback) => {
+    let mailBody = `Hello and Welcome ${userObj.fullName},<br>
                     You account was created on our system following your request on our website. 
-                    We thank and welcome you to our website, you can login on <a target="_blank" href="http://localhost:4200/login">http://localhost:4200/login</a>.<br>
+                    We thank and welcome you to our website, you can login on <a target="_blank" href="http://hermon.ga/login">http://hermon.ga/login</a>.<br>
                     Thank You for joining us.`;
 
     let mailOptions = {
-        from: `"Hermon - Meeting Scheduling System " ${$transporter.options.auth.user}`,
-        to: `"${email}"`,
+        from: `"Hermon Meeting" ${transporter.options.auth.user}`,
+        to: `"${userObj.email}"`,
         subject: "Welcome Email - Hermon",
         html: mailBody
     }
@@ -70,10 +68,11 @@ let signUpEmail = (userObj) => {
     transporter.sendMail(mailOptions)
     .then((result) => {
         logger.info('SignUp email sent to user', "mailLib: signUpEmail()", "successful");
+        callback(null, result);
     })
     .catch((err) => {
-        console.log(mailOptions);
         logger.error(`${err}`, "mailLib: signUpEmail()", "high");
+        callback(err, null);
     });
 
 }
@@ -102,7 +101,7 @@ let minuteBeforeEmail = (userId) => {
                         you've a meeting scheduled within a minute plz login to your account and check it before times out.<br>
                         Thank You`;
         let mailOptions = {
-            from: `"Hermon - Meeting Schduling System " ${transporter.options.auth.user}`,
+            from: `"Hermon Meeting" ${transporter.options.auth.user}`,
             to: `"${userObj.email}"`,
             subject: "Event remainder notification",
             html: mailBody
@@ -114,7 +113,6 @@ let minuteBeforeEmail = (userId) => {
             logger.info('Minute before remainder email sent to user', "mailLib: minuteBeforeEmail(): sendEmail()", "successful");
         })
         .catch((err) => {
-            console.log(mailOptions);
             logger.error(`${err}`, "mailLib: minuteBeforeEmail(): sendEmail()", "high");
         });
     }
@@ -157,7 +155,7 @@ let eventCreatedEmail = (userId, message) => {
                     ${message}.<br>
                     Thank You`;
         let mailOptions = {
-            from: `"Hermon - Meeting Schduling System " ${transporter.options.auth.user}`,
+            from: `"Hermon Meeting" ${transporter.options.auth.user}`,
             to: `"${userObj.email}"`,
             subject: "Event creation notification",
             html: mailBody
@@ -168,7 +166,6 @@ let eventCreatedEmail = (userId, message) => {
             logger.info('Event creation email sent to user', "mailLib: eventCreatedEmail(): sendEmail()", "successful");
         })
         .catch((err) => {
-            console.log(mailOptions);
             logger.error(`${err}`, "mailLib: eventCreatedEmail(): sendEmail()", "high");
         });
     }   
@@ -211,7 +208,7 @@ let eventRemovedEmail = (userId, message) => {
                     ${message}.<br>
                     Thank You`;
         let mailOptions = {
-            from: `"Hermon - Meeting Schduling System " ${transporter.options.auth.user}`,
+            from: `"Hermon Meeting" ${transporter.options.auth.user}`,
             to: `"${userObj.email}"`,
             subject: "Event removed notification",
             html: mailBody
@@ -222,7 +219,6 @@ let eventRemovedEmail = (userId, message) => {
             logger.info('Event removed email sent to user', "mailLib: eventRemovedEmail(): sendEmail()", "successful");
         })
         .catch((err) => {
-            console.log(mailOptions);
             logger.error(`${err}`, "mailLib: eventRemovedEmail(): sendEmail()", "high");
         });
     }
@@ -264,7 +260,7 @@ let eventUpdatedEmail = (userId, message) => {
                     ${message}.<br>
                     Thank You`;
         let mailOptions = {
-            from: `"Hermon - Meeting Schduling System " ${transporter.options.auth.user}`,
+            from: `"Hermon Meeting" ${transporter.options.auth.user}`,
             to: `"${userObj.email}"`,
             subject: "Event update notification",
             html: mailBody
@@ -275,7 +271,6 @@ let eventUpdatedEmail = (userId, message) => {
             logger.info('Event update email sent to user', "mailLib: eventUpdatedEmail(): sendEmail()", "successful");
         })
         .catch((err) => {
-            console.log(mailOptions);
             logger.error(`${err}`, "mailLib: eventUpdatedEmail(): sendEmail()", "high");
         });
     }

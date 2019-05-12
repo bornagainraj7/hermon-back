@@ -84,6 +84,8 @@ let setServer = (server) => {
         });
 
         socket.on('minute-before', (userId) => {
+            console.log(`minute-before ${userId}`);
+            myIO.emit(userId, 'minute-notification');
             mailLib.minuteBeforeEmail(userId);
         });
 

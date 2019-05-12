@@ -247,7 +247,7 @@ let getAllEventsCount = (req, res) => {
 let getAllEventsByUserCount = (req, res) => {
     let userId = req.user.userId;
 
-    EventModel.countDocuments({userId: userId})
+    EventModel.countDocuments({ creatorId: userId})
     .then((count) => {
         let apiResponse = response.generate(false, "Count retrivied", 200, count);
         res.send(apiResponse);
