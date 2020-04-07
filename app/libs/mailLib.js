@@ -2,7 +2,7 @@ const nodemailer = require('nodemailer');
 const logger = require('./loggerLib');
 const userLib = require('./userLib');
 const check = require('./checkLib');
-const appConfig = require('./../../config/appConfig');
+const appConfig = require('./../../config');
 
 
 // Create a SMTP transporter object
