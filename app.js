@@ -11,7 +11,7 @@ const mongoose = require('mongoose');
 const logger = require('./app/libs/loggerLib');
 const response = require('./app/libs/responseLib');
 
-const appConfig = require('./config/appConfig');
+// const appConfig = require('./config/appConfig');
 
 //Routes
 const userRoutes = require('./app/routes/userRoute');
@@ -105,7 +105,7 @@ const onListening = () => {
 
     //initiating mongoose only when server is initialized
     // let db = mongoose.connect('mongodb://127.0.0.1:27017/HermonDB', { useMongoClient: true });
-    let db = mongoose.connect(appConfig.db.uri, { useCreateIndex: true, useNewUrlParser: true });
+    let db = mongoose.connect('mongodb://127.0.0.1:27017/HermonDB', { useCreateIndex: true, useNewUrlParser: true });
 
 }
 

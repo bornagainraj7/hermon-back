@@ -2,21 +2,21 @@ const nodemailer = require('nodemailer');
 const logger = require('./loggerLib');
 const userLib = require('./userLib');
 const check = require('./checkLib');
-const appConfig = require('./../../config/appConfig');
+// const appConfig = require('./../../config/appConfig');
 
 
 // Create a SMTP transporter object
 const transporter = nodemailer.createTransport({
-    host: appConfig.smtp,
-    port: appConfig.mailPort,
+    host: smtp.gmail.com,
+    port: 587 || 465,
     secure: false,
     service: "gmail",
     tls: {
         rejectUnauthorized: false
     },
     auth: {
-        user: appConfig.email,
-        pass: appConfig.password
+        user: 'hermon.meeting@gmail.com',
+        pass: '66007777'
     }
 });
 
