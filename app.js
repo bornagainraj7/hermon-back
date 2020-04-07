@@ -105,7 +105,7 @@ const onListening = () => {
 
     //initiating mongoose only when server is initialized
     // let db = mongoose.connect('mongodb://127.0.0.1:27017/HermonDB', { useMongoClient: true });
-    let db = mongoose.connect('mongodb://127.0.0.1:27017/HermonDB', { useCreateIndex: true, useNewUrlParser: true });
+    let db = mongoose.connect('mongodb://127.0.0.1:27017/HermonDB', { useCreateIndex: true, useUnifiedTopology: true, useNewUrlParser: true });
 
 }
 
