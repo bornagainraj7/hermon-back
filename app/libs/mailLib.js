@@ -7,7 +7,7 @@ const check = require('./checkLib');
 
 // Create a SMTP transporter object
 const transporter = nodemailer.createTransport({
-    host: smtp.gmail.com,
+    host: 'smtp.gmail.com',
     port: 587 || 465,
     secure: false,
     service: "gmail",
