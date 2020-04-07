@@ -3,3 +3,5 @@
 responses.txt
 project-related-queries.txt
 package-lock.json
+config.js
+./config.js
