@@ -3,5 +3,6 @@
 responses.txt
 project-related-queries.txt
 package-lock.json
-/config/
+/config
+config
 /config/appconfig.js
